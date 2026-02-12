@@ -3,88 +3,55 @@ import { GoogleGenAI, Type, Modality, Chat, LiveServerMessage, Blob } from "@goo
 import { AnalysisResult, GroundingSource } from "../types.ts";
 
 /**
- * Safely retrieves the API Key from the environment.
- * Searches multiple common injection points used by Vercel, Vite, and other bundlers.
- */
-const getApiKey = (): string => {
-  try {
-    // 1. Check window.process.env (Shimmed in index.html)
-    if ((window as any).process?.env?.API_KEY) {
-      const key = (window as any).process.env.API_KEY;
-      if (key && !key.includes("your_actual")) return key;
-    }
-    
-    // 2. Check standard process.env (for bundlers like Webpack/Vite)
-    if (typeof process !== 'undefined' && process.env?.API_KEY) {
-      const key = process.env.API_KEY;
-      if (key && !key.includes("your_actual")) return key;
-    }
-    
-    // 3. Check Vite/ESM standard environment variables
-    // @ts-ignore - meta is not always defined in all environments
-    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) {
-      // @ts-ignore
-      const key = import.meta.env.API_KEY;
-      if (key && !key.includes("your_actual")) return key;
-    }
-
-    // 4. Fallback to common global injection points
-    if ((window as any).API_KEY && !(window as any).API_KEY.includes("your_actual")) {
-      return (window as any).API_KEY;
-    }
-
-  } catch (e) {
-    console.warn("Bazaar-Sense: Key lookup failed", e);
-  }
-  return "";
-};
-
-/**
- * Helper to handle retries for API calls with specialized handling for 429 Quota Exceeded.
+ * Helper to handle retries for API calls with specialized handling for Quota and Network errors.
  */
 async function withRetry<T>(
-  fn: (modelName: string) => Promise<T>, 
+  fn: (ai: GoogleGenAI, modelName: string) => Promise<T>, 
   primaryModel: string,
   fallbackModel?: string,
-  maxRetries = 3
+  maxRetries = 2
 ): Promise<T> {
   let lastError: any;
   let currentModel = primaryModel;
 
-  const apiKey = getApiKey();
+  const apiKey = process.env.API_KEY;
   
-  if (!apiKey || apiKey === "") {
-    throw new Error("MISSING_API_KEY: No API Key found. Ensure 'API_KEY' is set in Vercel Environment Variables and you have REDEPLOYED.");
+  if (!apiKey || apiKey === "" || apiKey.includes("your_actual")) {
+    throw new Error("KEY_NOT_CONFIGURED: The Gemini API key is missing. Check Vercel Environment Variables or the diagnostic console.");
   }
+
+  const ai = new GoogleGenAI({ apiKey });
 
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await fn(currentModel);
+      return await fn(ai, currentModel);
     } catch (err: any) {
       lastError = err;
-      const errStr = typeof err === 'string' ? err : (err?.message || JSON.stringify(err) || "");
+      const errStr = err?.message || JSON.stringify(err) || "";
       
-      console.error(`Bazaar-Sense: Attempt ${i+1} failed for ${currentModel}:`, err);
+      console.error(`Bazaar-Sense: Attempt ${i+1} failed [${currentModel}]:`, err);
 
-      const isQuotaError = errStr.includes('429') || 
-                          errStr.includes('RESOURCE_EXHAUSTED') ||
-                          errStr.toLowerCase().includes('quota') ||
-                          errStr.toLowerCase().includes('rate limit');
-      
+      // Handle Quota or Rate Limits
+      const isQuotaError = errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED');
       if (isQuotaError && i < maxRetries - 1) {
         if (fallbackModel && i === 0) {
-          console.warn(`Bazaar-Sense: Quota hit for ${currentModel}. Switching to fallback: ${fallbackModel}`);
           currentModel = fallbackModel;
         }
-        
-        const delay = (i + 1) * 2000;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
         continue;
       }
       
-      // If it's a 403, the key is likely wrong
-      if (errStr.includes('403') || errStr.toLowerCase().includes('permission')) {
-        throw new Error("INVALID_API_KEY: The provided Gemini API Key is invalid or restricted. Check your Google AI Studio credentials.");
+      // Handle Invalid Key (403)
+      if (errStr.includes('403')) {
+        throw new Error("FORBIDDEN: Your API Key was rejected. Please check it in Google AI Studio.");
+      }
+
+      // Handle Model Not Found (404)
+      if (errStr.includes('404') || errStr.includes('not found')) {
+        if (fallbackModel && i === 0) {
+          currentModel = fallbackModel;
+          continue;
+        }
       }
 
       throw err;
@@ -96,13 +63,11 @@ async function withRetry<T>(
 function parseJSONFromResponse(text: string): any {
   const jsonRegex = /\{[\s\S]*\}/;
   const match = text.match(jsonRegex);
-  if (!match) {
-    throw new Error("The model did not return a valid data structure.");
-  }
+  if (!match) throw new Error("The expert returned an unreadable format.");
   try {
     return JSON.parse(match[0]);
   } catch (e) {
-    throw new Error("Failed to interpret the bazaar data.");
+    throw new Error("Failed to parse bazaar data.");
   }
 }
 
@@ -110,14 +75,7 @@ export const analyzeImage = async (
   base64Image: string, 
   location?: { latitude: number; longitude: number }
 ): Promise<AnalysisResult> => {
-  return withRetry(async (modelName) => {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    const is25Series = modelName.includes('2.5');
-    const tools: any[] = [{ googleSearch: {} }];
-    if (is25Series) {
-      tools.push({ googleMaps: {} });
-    }
-
+  return withRetry(async (ai, modelName) => {
     const response = await ai.models.generateContent({
       model: modelName,
       contents: {
@@ -146,46 +104,34 @@ export const analyzeImage = async (
         ],
       },
       config: {
-        tools: tools,
-        toolConfig: (is25Series && location) ? {
-          retrievalConfig: {
-            latLng: {
-              latitude: location.latitude,
-              longitude: location.longitude
-            }
-          }
-        } : undefined,
+        tools: [{ googleSearch: {} }],
       }
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response from expert.");
+    if (!text) throw new Error("The analysis returned no content.");
     const parsedResult = parseJSONFromResponse(text) as AnalysisResult;
 
+    // Extract grounding sources
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
       chunks.forEach((chunk: any) => {
         if (chunk.web?.uri) sources.push({ title: chunk.web.title || "Web", uri: chunk.web.uri, type: 'web' });
-        else if (chunk.maps?.uri) sources.push({ title: chunk.maps.title || "Maps", uri: chunk.maps.uri, type: 'maps' });
       });
     }
     
     parsedResult.groundingSources = Array.from(new Map(sources.map(s => [s.uri, s])).values());
     return parsedResult;
-  }, 'gemini-2.5-flash', 'gemini-3-flash-preview');
+  }, 'gemini-3-flash-preview', 'gemini-flash-lite-latest');
 };
 
 export const generateTTS = async (text: string, targetLanguageContext: string = "Pashto"): Promise<Uint8Array> => {
-  return withRetry(async (modelName) => {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    
+  return withRetry(async (ai) => {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: [{ 
-        parts: [{ text: `Instruction: Speak this clearly and naturally as a native ${targetLanguageContext} speaker from Peshawar. 
-        CRITICAL: Use authentic ${targetLanguageContext} phonetics. Absolutely NO Hindi sounds or Devnagari-style script patterns.
-        Target text to speak: "${text}"` }] 
+        parts: [{ text: `Instruction: Speak this clearly and naturally as a native ${targetLanguageContext} speaker from Peshawar. Use authentic regional phonetics. Target text: "${text}"` }] 
       }],
       config: {
         responseModalities: [Modality.AUDIO],
@@ -198,7 +144,7 @@ export const generateTTS = async (text: string, targetLanguageContext: string = 
     });
 
     const data = response.candidates?.[0]?.content?.parts.find(p => p.inlineData?.data)?.inlineData?.data;
-    if (!data) throw new Error("Audio generation failed.");
+    if (!data) throw new Error("Speech synthesis failed.");
     return decode(data);
   }, 'gemini-2.5-flash-preview-tts');
 };

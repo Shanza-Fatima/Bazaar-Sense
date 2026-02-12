@@ -28,6 +28,7 @@ export interface HistoryItem {
 }
 
 export enum AppState {
+  CONFIG_REQUIRED = 'CONFIG_REQUIRED',
   IDLE = 'IDLE',
   CAPTURING = 'CAPTURING',
   ANALYZING = 'ANALYZING',

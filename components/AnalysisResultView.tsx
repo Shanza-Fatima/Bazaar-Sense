@@ -26,6 +26,7 @@ interface AnalysisResultViewProps {
 const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset, onSaveHistory }) => {
   const [activeVoice, setActiveVoice] = useState<'urdu' | 'pashto' | 'live' | null>(null);
   const [liveStatus, setLiveStatus] = useState<'idle' | 'connecting' | 'listening' | 'speaking' | 'error'>('idle');
+  const [liveErrorMessage, setLiveErrorMessage] = useState<string>("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [dealStatus, setDealStatus] = useState<'none' | 'success'>('none');
   const [sellerLanguage, setSellerLanguage] = useState<'urdu' | 'pashto'>('pashto');
@@ -78,14 +79,15 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
   const startLiveSession = async () => {
     if (liveStatus !== 'idle') return;
     
-    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : (window as any).API_KEY;
-    if (!apiKey) {
-      console.error("API Key missing");
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === "" || apiKey.includes("your_actual")) {
+      setLiveErrorMessage("API Key not found. Please configure 'API_KEY' in Vercel.");
       setLiveStatus('error');
       return;
     }
 
     setLiveStatus('connecting');
+    setLiveErrorMessage("");
     setChatHistory([]);
     isAtBottomRef.current = true;
 
@@ -105,7 +107,6 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
       outAudioContextRef.current = outputCtx;
 
       const targetLang = sellerLanguage === 'urdu' ? 'URDU' : 'PASHTO';
-      const forbiddenLang = sellerLanguage === 'urdu' ? 'PASHTO' : 'URDU';
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
@@ -172,16 +173,10 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
               nextStartTimeRef.current += audioBuffer.duration;
               sourcesRef.current.add(source);
             }
-
-            if (message.serverContent?.interrupted) {
-              sourcesRef.current.forEach(s => s.stop());
-              sourcesRef.current.clear();
-              nextStartTimeRef.current = 0;
-              setLiveStatus('listening');
-            }
           },
-          onerror: (e) => {
-            console.error('Bridge error:', e);
+          onerror: (e: any) => {
+            console.error('Bridge Error:', e);
+            setLiveErrorMessage(e?.message || "Connection to Live API failed.");
             setLiveStatus('error');
           },
           onclose: () => setLiveStatus('idle'),
@@ -193,22 +188,14 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
           },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
-          systemInstruction: `YOU ARE A STRICT REAL-TIME TRANSLATOR BRIDGE.
-          CONTEXT: A traveler is bargaining for "${result.objectName}" (Fair Price: ${result.pricePKR}).
-          
-          USER SELECTION: The Seller ONLY speaks ${targetLang}. 
-          
-          MANDATORY RULES:
-          1. TRANSLATE English input immediately to ${targetLang} and SPEAK it.
-          2. TRANSLATE ${targetLang} input immediately to English and SPEAK it.
-          3. ABSOLUTELY FORBIDDEN: Do NOT speak or translate into ${forbiddenLang}. You must ONLY use ${targetLang} as per the user's explicit button selection.
-          4. If the traveler speaks English, bridge to ${targetLang}. If the seller speaks ${targetLang}, bridge to English.
-          5. Use natural, local bazaar vocabulary for ${targetLang}.
-          6. Be lightning fast.`,
+          systemInstruction: `YOU ARE A BAZAAR TRANSLATOR. 
+          Context: Negotiating for "${result.objectName}". Seller speaks ${targetLang}. 
+          Bridge Traveler's English to ${targetLang} and Seller's ${targetLang} to English.`,
         },
       });
     } catch (err: any) {
       console.error('Session failed:', err);
+      setLiveErrorMessage(err?.message || "Internal Bridge Error.");
       setLiveStatus('error');
     }
   };
@@ -330,12 +317,21 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
         >
           {chatHistory.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4">
-               <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                 <svg className="w-6 h-6 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                 </svg>
-               </div>
-               <p className="text-slate-500 text-xs font-medium max-w-[220px]">Choose a language above and click "Activate Bridge" to start the conversation.</p>
+               {liveStatus === 'error' ? (
+                 <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 max-w-xs mx-auto">
+                    <p className="text-red-400 text-[10px] font-black uppercase mb-1">Bridge Error</p>
+                    <p className="text-white text-xs">{liveErrorMessage || "Could not connect."}</p>
+                 </div>
+               ) : (
+                 <>
+                   <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                     <svg className="w-6 h-6 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                     </svg>
+                   </div>
+                   <p className="text-slate-500 text-xs font-medium max-w-[220px]">Choose a language and click "Activate Bridge".</p>
+                 </>
+               )}
             </div>
           ) : (
             chatHistory.map((msg) => (
@@ -369,7 +365,7 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${liveStatus === 'speaking' ? 'bg-emerald-500 animate-pulse' : 'bg-indigo-500'}`}></span>
                     <span className="text-white text-[9px] font-black uppercase tracking-widest">
-                      {liveStatus === 'speaking' ? 'Translating Speech...' : 'Listening for Voice...'}
+                      {liveStatus === 'speaking' ? 'Translating Speech...' : 'Listening...'}
                     </span>
                   </div>
                </div>

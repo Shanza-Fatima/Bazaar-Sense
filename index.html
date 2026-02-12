@@ -29,19 +29,12 @@
     }
   </style>
 <script>
-  /**
-   * SAFETY SHIM
-   * This ensures that when the Gemini SDK or our code looks for process.env.API_KEY,
-   * it finds a valid object even if the build tool didn't inject it.
-   */
+  // Ensure process.env is available for the browser environment
   window.process = window.process || { env: {} };
-  window.process.env = window.process.env || {};
   
-  // Vercel sometimes injects variables into the window during static builds
-  // if you use specific build plugins. We check for those here.
-  if (!window.process.env.API_KEY && window.API_KEY) {
-    window.process.env.API_KEY = window.API_KEY;
-  }
+  // Vercel / Build-time injection logic
+  // If the variable isn't injected, we handle it via the Setup UI in App.tsx
+  window.process.env.API_KEY = window.process.env.API_KEY || "";
 </script>
 <script type="importmap">
 {
@@ -54,13 +47,6 @@
 }
 </script>
 <script type="module" src="index.tsx"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
-    });
-  }
-</script>
 </head>
 <body>
   <div id="root"></div>

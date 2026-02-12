@@ -1,0 +1,17 @@
+
+{
+  "name": "Bazaar-Sense",
+  "short_name": "BazaarSense",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "description": "AI-powered shopping companion for Pakistani bazaars.",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

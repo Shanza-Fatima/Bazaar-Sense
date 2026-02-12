@@ -4,20 +4,37 @@ import { AnalysisResult, GroundingSource } from "../types.ts";
 
 /**
  * Safely retrieves the API Key from the environment.
- * Handles cases where 'process' might not be defined in raw browser environments.
+ * Searches multiple common injection points used by Vercel, Vite, and other bundlers.
  */
 const getApiKey = (): string => {
   try {
-    // Check if process exists (standard in many build tools)
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
+    // 1. Check window.process.env (Shimmed in index.html)
+    if ((window as any).process?.env?.API_KEY) {
+      const key = (window as any).process.env.API_KEY;
+      if (key && !key.includes("your_actual")) return key;
     }
-    // Check for common fallback global injection
-    if ((window as any).API_KEY) {
+    
+    // 2. Check standard process.env (for bundlers like Webpack/Vite)
+    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+      const key = process.env.API_KEY;
+      if (key && !key.includes("your_actual")) return key;
+    }
+    
+    // 3. Check Vite/ESM standard environment variables
+    // @ts-ignore - meta is not always defined in all environments
+    if (typeof import.meta !== 'undefined' && import.meta.env?.API_KEY) {
+      // @ts-ignore
+      const key = import.meta.env.API_KEY;
+      if (key && !key.includes("your_actual")) return key;
+    }
+
+    // 4. Fallback to common global injection points
+    if ((window as any).API_KEY && !(window as any).API_KEY.includes("your_actual")) {
       return (window as any).API_KEY;
     }
+
   } catch (e) {
-    console.warn("Environment variable access failed", e);
+    console.warn("Bazaar-Sense: Key lookup failed", e);
   }
   return "";
 };
@@ -36,8 +53,8 @@ async function withRetry<T>(
 
   const apiKey = getApiKey();
   
-  if (!apiKey || apiKey === "" || apiKey === "YOUR_API_KEY") {
-    throw new Error("MISSING_API_KEY: The Google Gemini API key is not configured. Please add API_KEY to your Vercel Environment Variables or Project Settings.");
+  if (!apiKey || apiKey === "") {
+    throw new Error("MISSING_API_KEY: No API Key found. Ensure 'API_KEY' is set in Vercel Environment Variables and you have REDEPLOYED.");
   }
 
   for (let i = 0; i < maxRetries; i++) {
@@ -47,6 +64,8 @@ async function withRetry<T>(
       lastError = err;
       const errStr = typeof err === 'string' ? err : (err?.message || JSON.stringify(err) || "");
       
+      console.error(`Bazaar-Sense: Attempt ${i+1} failed for ${currentModel}:`, err);
+
       const isQuotaError = errStr.includes('429') || 
                           errStr.includes('RESOURCE_EXHAUSTED') ||
                           errStr.toLowerCase().includes('quota') ||
@@ -54,7 +73,7 @@ async function withRetry<T>(
       
       if (isQuotaError && i < maxRetries - 1) {
         if (fallbackModel && i === 0) {
-          console.warn(`Quota hit for ${currentModel}. Switching to fallback: ${fallbackModel}`);
+          console.warn(`Bazaar-Sense: Quota hit for ${currentModel}. Switching to fallback: ${fallbackModel}`);
           currentModel = fallbackModel;
         }
         
@@ -62,6 +81,12 @@ async function withRetry<T>(
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
+      
+      // If it's a 403, the key is likely wrong
+      if (errStr.includes('403') || errStr.toLowerCase().includes('permission')) {
+        throw new Error("INVALID_API_KEY: The provided Gemini API Key is invalid or restricted. Check your Google AI Studio credentials.");
+      }
+
       throw err;
     }
   }

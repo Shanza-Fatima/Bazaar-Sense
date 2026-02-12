@@ -83,17 +83,17 @@ const App: React.FC = () => {
       const errMsg = err?.message || JSON.stringify(err) || "";
       
       const isQuota = errMsg.includes('429') || errMsg.toLowerCase().includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED');
-      const isPermission = errMsg.toLowerCase().includes('permission') || errMsg.toLowerCase().includes('notallowed');
+      const isPermission = errMsg.toLowerCase().includes('permission') || errMsg.toLowerCase().includes('notallowed') || errMsg.includes('INVALID_API_KEY');
       const isConfig = errMsg.includes('MISSING_API_KEY') || errMsg.includes('process is not defined');
       
       setError({
         message: isConfig 
-          ? "API Configuration Error: Please ensure you have added 'API_KEY' to your Vercel Environment Variables and redeployed."
+          ? "API Key Missing: Ensure 'API_KEY' is added to Vercel and you have clicked 'Redeploy'."
           : isPermission 
-            ? "Permission denied. Please ensure your browser has granted camera and location access to this URL."
+            ? errMsg.includes('INVALID') ? "Your API Key was rejected by Google. Check it in Google AI Studio." : "Camera or Location permission was denied."
             : isQuota 
-              ? "The bazaar is busy right now (Rate Limit)! Please wait a moment and try again." 
-              : `Connection error: ${errMsg.substring(0, 100)}. Please check your Vercel project logs.`,
+              ? "Rate limit exceeded. Please wait 60 seconds." 
+              : `Connection error. Please check your internet and API settings.`,
         isQuota,
         isPermission,
         isConfig
@@ -248,9 +248,13 @@ const App: React.FC = () => {
         {state === AppState.ERROR && error && (
           <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl text-center border-2 border-red-50 animate-in zoom-in-95 duration-500">
             <div className={`w-20 h-20 ${error.isConfig ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'} rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm`}>
-              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
             </div>
-            <h2 className="text-2xl font-black text-gray-900 mb-3">{error.isConfig ? 'Configuration Error' : error.isQuota ? 'Bazaar is Busy' : 'Processing Error'}</h2>
+            <h2 className="text-2xl font-black text-gray-900 mb-3">
+              {error.isConfig ? 'Setup Required' : error.isQuota ? 'Server Busy' : 'Connection Error'}
+            </h2>
             <p className="text-gray-500 mb-8 leading-relaxed max-w-xs mx-auto text-sm">{error.message}</p>
             <div className="flex flex-col gap-3">
               <button
@@ -271,7 +275,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="mt-auto pt-16 concert-8 text-center text-slate-400 text-[10px] max-w-sm uppercase tracking-[0.2em] font-bold">
-        <p className="mb-2">Bazaar-Sense v2.9 • PWA Ready</p>
+        <p className="mb-2">Bazaar-Sense v3.0 • Diagnostics Enhanced</p>
         <p>Your Peshawar Shopping Companion</p>
       </footer>
     </div>

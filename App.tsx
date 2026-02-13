@@ -178,11 +178,13 @@ const App: React.FC = () => {
                  V3.0 Smart Companion
               </div>
               <h2 className="text-3xl md:text-5xl font-black text-teal-950 tracking-tighter mb-4 leading-tight">
-                Market Intel <span className="text-teal-600">at Your Fingertips.</span>
+                Market Prices <span className="text-teal-600">at Your Fingertips.</span>
               </h2>
-              <p className="text-teal-900/40 text-sm md:text-base font-semibold leading-relaxed max-w-md mx-auto">
-                Snap any artifact to unveil its story, typical PKR value, and the local dialect.
-              </p>
+              <div className="text-teal-900/40 text-sm md:text-base font-semibold leading-relaxed max-w-md mx-auto space-y-1">
+                <p>Find fair PKR prices.</p>
+                <p>Negotiate deals easily.</p>
+                <p>Real-time bridge translation.</p>
+              </div>
             </div>
             
             <CameraView onCapture={handleCapture} isLoading={state === AppState.ANALYZING} />

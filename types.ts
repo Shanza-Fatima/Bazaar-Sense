@@ -1,7 +1,14 @@
-
 export interface TranslationInfo {
   name: string;
   phonetic: string;
+}
+
+export interface VerifiedShop {
+  name: string;
+  location: string;
+  specialty: string;
+  discountCode: string;
+  rating: number;
 }
 
 export interface GroundingSource {
@@ -18,6 +25,7 @@ export interface AnalysisResult {
   description: string;
   locationTips?: string;
   groundingSources?: GroundingSource[];
+  verifiedShops?: VerifiedShop[];
 }
 
 export interface HistoryItem {

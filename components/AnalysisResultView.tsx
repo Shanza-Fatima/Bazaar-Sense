@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AnalysisResult, HistoryItem } from '../types.ts';
+import { AnalysisResult, HistoryItem, VerifiedShop } from '../types.ts';
 import { 
   generateTTS, 
   decodeAudioData, 
@@ -23,10 +23,10 @@ interface AnalysisResultViewProps {
 const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset, onSaveHistory }) => {
   const [activeVoice, setActiveVoice] = useState<'urdu' | 'pashto' | 'live' | null>(null);
   const [liveStatus, setLiveStatus] = useState<'idle' | 'connecting' | 'listening' | 'speaking' | 'error'>('idle');
-  const [liveErrorMessage, setLiveErrorMessage] = useState<string>("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [dealStatus, setDealStatus] = useState<'none' | 'success'>('none');
   const [sellerLanguage, setSellerLanguage] = useState<'urdu' | 'pashto'>('pashto');
+  const [revealedCodes, setRevealedCodes] = useState<Record<string, boolean>>({});
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const outAudioContextRef = useRef<AudioContext | null>(null);
@@ -51,43 +51,27 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
 
     if (liveSessionRef.current) {
       const { inputCtx, scriptProcessor } = liveSessionRef.current;
-      try {
-        scriptProcessor.disconnect();
-      } catch (e) {
-        console.debug('ScriptProcessor already disconnected');
-      }
-      
-      if (inputCtx.state !== 'closed') {
-        inputCtx.close().catch(err => console.error("Error closing inputCtx:", err));
-      }
+      try { scriptProcessor.disconnect(); } catch (e) {}
+      if (inputCtx.state !== 'closed') inputCtx.close();
       liveSessionRef.current = null;
     }
 
     if (outAudioContextRef.current) {
-      if (outAudioContextRef.current.state !== 'closed') {
-        outAudioContextRef.current.close().catch(err => console.error("Error closing outputCtx:", err));
-      }
+      if (outAudioContextRef.current.state !== 'closed') outAudioContextRef.current.close();
       outAudioContextRef.current = null;
     }
 
-    sourcesRef.current.forEach(source => {
-      try {
-        source.stop();
-      } catch (e) {
-        // Source might already be stopped
-      }
-    });
+    sourcesRef.current.forEach(source => { try { source.stop(); } catch (e) {} });
     sourcesRef.current.clear();
     nextStartTimeRef.current = 0;
     setLiveStatus('idle');
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopLiveSession();
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current.close();
       }
     };
   }, [stopLiveSession]);
@@ -133,13 +117,8 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
 
   const startLiveSession = async () => {
     const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      setLiveErrorMessage("Key missing.");
-      setLiveStatus('error');
-      return;
-    }
+    if (!apiKey) { setLiveStatus('error'); return; }
     setLiveStatus('connecting');
-    setLiveErrorMessage("");
     setChatHistory([]);
 
     try {
@@ -160,10 +139,7 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
             scriptProcessor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               sessionPromise.then(s => {
-                // Ensure context is still alive before sending
-                if (inputCtx.state !== 'closed') {
-                  s.sendRealtimeInput({ media: createPcmBlob(inputData) });
-                }
+                if (inputCtx.state !== 'closed') s.sendRealtimeInput({ media: createPcmBlob(inputData) });
               });
             };
             source.connect(scriptProcessor);
@@ -209,62 +185,53 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
               }
             }
           },
-          onerror: (e) => {
-            console.error('Live API Error:', e);
-            setLiveStatus('error');
-          },
-          onclose: () => {
-            setLiveStatus('idle');
-          },
+          onerror: (e) => { console.error('Error:', e); setLiveStatus('error'); },
+          onclose: () => { setLiveStatus('idle'); },
         },
         config: {
           responseModalities: [Modality.AUDIO],
           inputAudioTranscription: {},
           outputAudioTranscription: {},
-          systemInstruction: `You are a PASSIVE BRIDGE TRANSLATOR in a Peshawar Bazaar. 
-          
-          RULES:
-          1. DO NOT initiate conversation. 
-          2. DO NOT negotiate or add your own thoughts. 
-          3. STRICT TRANSLATION ONLY:
-             - If you hear English, translate it to AUTHENTIC PURE PESHAWARI ${sellerLanguage.toUpperCase()}.
-             - If you hear ${sellerLanguage.toUpperCase()}, translate it to English.
-          4. For Pashto, use the local PURE Peshawar/Yousafzai dialect. No Kabuli words.
-          5. Wait for the user or merchant to speak. Do not generate sentences by yourself.
-          
-          Context: The user is looking at a ${result.objectName}.`,
+          systemInstruction: `ACT AS A PASSIVE BRIDGE TRANSLATOR. 
+          1. DO NOT initiate conversation.
+          2. DO NOT talk by yourself.
+          3. WAIT for either the English speaker or the ${sellerLanguage.toUpperCase()} speaker.
+          4. TRANSLATE English to clear, natural ${sellerLanguage.toUpperCase()} and vice versa.
+          5. Use standard General Pashto that is understood widely.`,
         },
       });
-    } catch (err) { 
-      console.error('Start Live Session Error:', err);
-      setLiveStatus('error'); 
-    }
+    } catch (err) { setLiveStatus('error'); }
   };
 
-  const handleConclusion = (success: boolean) => {
-    stopLiveSession();
-    if (success) {
-      onSaveHistory({ id: Date.now().toString(), objectName: result.objectName, pricePKR: result.pricePKR, timestamp: Date.now() });
-      setDealStatus('success');
-    } else onReset();
+  const toggleRevealCode = (shopName: string) => {
+    setRevealedCodes(prev => ({ ...prev, [shopName]: !prev[shopName] }));
+  };
+
+  const handleSuccessfulBuy = () => {
+    onSaveHistory({ 
+      id: Date.now().toString(), 
+      objectName: result.objectName, 
+      pricePKR: result.pricePKR, 
+      timestamp: Date.now() 
+    });
+    setDealStatus('success');
   };
 
   if (dealStatus === 'success') {
     return (
-      <div className="bg-white rounded-[3rem] elegant-shadow p-12 text-center animate-in zoom-in-95">
-        <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
-          <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+      <div className="bg-white rounded-[3rem] elegant-shadow p-12 text-center animate-in zoom-in-95 border-4 border-emerald-50">
+        <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-xl shadow-emerald-100/50 rotate-3">
+          <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
         </div>
-        <h2 className="text-2xl font-black text-emerald-900 mb-2">Deal Finalized!</h2>
-        <p className="text-emerald-700/60 text-sm mb-10 font-medium tracking-tight">Your successful acquisition has been recorded.</p>
-        <button onClick={onReset} className="px-12 py-5 bg-teal-800 text-white rounded-2xl font-bold text-xs uppercase tracking-[0.2em] btn-elegant shadow-xl shadow-teal-100">Next Discovery</button>
+        <h2 className="text-3xl font-black text-emerald-950 mb-3 tracking-tighter">Deal Finalized!</h2>
+        <p className="text-teal-900/40 mb-12 text-sm font-semibold tracking-tight">The item has been added to your acquisition log.</p>
+        <button onClick={onReset} className="w-full max-w-xs py-6 bg-teal-800 text-white rounded-3xl font-black text-xs uppercase tracking-[0.4em] shadow-xl btn-elegant mx-auto block">Continue Discovery</button>
       </div>
     );
   }
 
   return (
     <div className="bg-white/90 backdrop-blur-xl rounded-[2.5rem] elegant-shadow p-6 md:p-10 animate-in fade-in slide-in-from-bottom-6 duration-700 ease-out border border-white/50">
-      {/* Compact Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -284,21 +251,10 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
         </div>
       </div>
 
-      {/* Tighter Description Section */}
       <div className="bg-gradient-to-br from-amber-50/40 to-orange-50/20 border border-amber-100/40 rounded-3xl p-5 mb-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-5">
-           <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M13 14h-2V9h2v5zm0 4h-2v-2h2v2zM1 21h22L12 2 1 21z"/></svg>
-        </div>
-        <div className="text-[10px] font-black text-amber-700/40 uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
-           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-           Merchant Intelligence
-        </div>
-        <p className="text-sm md:text-base text-teal-900/70 leading-relaxed font-medium italic pr-4">
-          "{result.description}"
-        </p>
+        <p className="text-sm md:text-base text-teal-900/70 leading-relaxed font-medium italic pr-4">"{result.description}"</p>
       </div>
 
-      {/* Translation Grid - Tighter & More Vibrant */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="group p-5 md:p-6 rounded-[2rem] bg-rose-50/50 border border-rose-100/50 hover:bg-white transition-all shadow-sm flex items-center justify-between">
           <div>
@@ -311,7 +267,7 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
         </div>
         <div className="group p-5 md:p-6 rounded-[2rem] bg-teal-50/50 border border-teal-100/50 hover:bg-white transition-all shadow-sm flex items-center justify-between">
           <div>
-            <div className="text-[9px] font-black text-teal-300 uppercase tracking-widest mb-1">Pashto</div>
+            <div className="text-[9px] font-black text-teal-300 uppercase tracking-widest mb-1">General Pashto</div>
             <div className="text-2xl font-bold text-teal-900" dir="rtl">{result.pashto.name}</div>
           </div>
           <button onClick={() => playStaticAudio(result.pashto.name, "Pashto", "pashto")} className={`p-4 rounded-2xl btn-elegant ${activeVoice === 'pashto' ? 'bg-teal-600 text-white shadow-lg' : 'bg-white text-teal-400 border border-teal-100 shadow-sm'}`}>
@@ -320,13 +276,11 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
         </div>
       </div>
 
-      {/* Language Toggle - Compact */}
       <div className="flex bg-teal-900/5 p-1.5 rounded-2xl mb-6 max-w-sm mx-auto">
         <button onClick={() => setSellerLanguage('urdu')} disabled={liveStatus !== 'idle'} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${sellerLanguage === 'urdu' ? 'bg-white text-teal-900 shadow-md' : 'text-teal-900/40'}`}>Urdu Speaker</button>
         <button onClick={() => setSellerLanguage('pashto')} disabled={liveStatus !== 'idle'} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${sellerLanguage === 'pashto' ? 'bg-white text-teal-900 shadow-md' : 'text-teal-900/40'}`}>Pashto Speaker</button>
       </div>
 
-      {/* Chat Bridge - Fresh Design */}
       <div className="bg-teal-950 rounded-[2.5rem] p-5 md:p-8 mb-8 shadow-2xl h-[380px] md:h-[450px] flex flex-col relative border border-teal-900 ring-4 ring-teal-900/20">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
@@ -349,18 +303,15 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto space-y-5 pr-2 custom-scrollbar">
           {chatHistory.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-teal-700/50 text-center px-10">
-              <div className="w-14 h-14 border-2 border-dashed border-teal-900 rounded-full flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-              </div>
-              <span className="text-xs font-medium tracking-tight">The AI is waiting. Speak in English or {sellerLanguage.charAt(0).toUpperCase() + sellerLanguage.slice(1)}...</span>
+              <span className="text-xs font-medium tracking-tight">Speak now. The bridge will translate passively...</span>
             </div>
           ) : (
             chatHistory.map((msg) => (
               <div key={msg.id} className={`flex flex-col ${msg.role === 'traveler' ? 'items-start' : 'items-end'} animate-in slide-in-from-bottom-2`}>
                 <span className={`text-[8px] font-black uppercase mb-1.5 tracking-widest ${msg.role === 'traveler' ? 'text-teal-500' : 'text-amber-500'}`}>
-                  {msg.role === 'traveler' ? 'English' : `${sellerLanguage.toUpperCase()} (Peshawar)`}
+                  {msg.role === 'traveler' ? 'English' : `Local ${sellerLanguage.toUpperCase()}`}
                 </span>
-                <div className={`max-w-[85%] p-4 rounded-2xl text-xs md:text-sm leading-relaxed font-semibold transition-all shadow-lg ${msg.role === 'traveler' ? 'bg-teal-900 text-teal-100 rounded-tl-none border-l-4 border-teal-500' : 'bg-teal-800 text-white rounded-tr-none border-r-4 border-amber-500'}`}>
+                <div className={`max-w-[85%] p-4 rounded-2xl text-xs md:text-sm font-semibold shadow-lg ${msg.role === 'traveler' ? 'bg-teal-900 text-teal-100 border-l-4 border-teal-500' : 'bg-teal-800 text-white border-r-4 border-amber-500'}`}>
                   {msg.text}
                 </div>
               </div>
@@ -370,27 +321,49 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
 
         <div className="mt-6 pt-4 border-t border-teal-900/50">
           {liveStatus === 'idle' || liveStatus === 'error' ? (
-            <button onClick={startLiveSession} className="w-full py-4 md:py-6 rounded-2xl bg-white text-teal-900 font-black text-xs uppercase tracking-[0.4em] shadow-xl hover:bg-teal-50 transition-colors btn-elegant">Activate Voice Bridge</button>
+            <button onClick={startLiveSession} className="w-full py-4 md:py-6 rounded-2xl bg-white text-teal-900 font-black text-xs uppercase tracking-[0.4em] shadow-xl btn-elegant">Activate Voice Bridge</button>
           ) : (
-            <button onClick={stopLiveSession} className="w-full py-4 md:py-6 rounded-2xl bg-rose-500/10 text-rose-400 border-2 border-rose-500/20 font-black text-xs uppercase tracking-[0.4em] hover:bg-rose-500/20 btn-elegant">Halt Connection</button>
+            <button onClick={stopLiveSession} className="w-full py-4 md:py-6 rounded-2xl bg-rose-500/10 text-rose-400 border-2 border-rose-500/20 font-black text-xs uppercase tracking-[0.4em] btn-elegant">Halt Connection</button>
           )}
         </div>
       </div>
 
-      {/* Tighter Footer Actions */}
+      {/* Verified Merchants Section - Moved to End */}
+      {result.verifiedShops && result.verifiedShops.length > 0 && (
+        <div className="mb-8 animate-in slide-in-from-bottom duration-700">
+           <div className="flex items-center gap-2 mb-4">
+              <span className="px-3 py-1 bg-amber-500 text-white text-[8px] font-black uppercase tracking-widest rounded-full shadow-sm">Verified Partners</span>
+              <div className="h-[1px] flex-1 bg-amber-100"></div>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {result.verifiedShops.map((shop, idx) => (
+                <div key={idx} className="bg-white border border-amber-100 rounded-[1.5rem] p-5 shadow-sm hover:shadow-md transition-all">
+                   <div className="flex justify-between items-start mb-3">
+                      <div>
+                         <h4 className="text-teal-900 font-black text-sm">{shop.name}</h4>
+                         <p className="text-teal-900/40 text-[9px] font-bold">{shop.location}</p>
+                      </div>
+                      <div className="flex items-center gap-1 text-amber-500">
+                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                         <span className="text-[10px] font-black">{shop.rating}</span>
+                      </div>
+                   </div>
+                   <p className="text-teal-900/60 text-[10px] mb-4 line-clamp-1">{shop.specialty}</p>
+                   <button 
+                    onClick={() => toggleRevealCode(shop.name)}
+                    className={`w-full py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${revealedCodes[shop.name] ? 'bg-teal-50 text-teal-600' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+                   >
+                      {revealedCodes[shop.name] ? `CODE: ${shop.discountCode}` : 'Get Discount Code'}
+                   </button>
+                </div>
+              ))}
+           </div>
+        </div>
+      )}
+
       <div className="flex gap-4">
-        <button 
-          onClick={() => handleConclusion(true)} 
-          className="flex-1 py-5 rounded-2xl bg-gradient-to-r from-teal-800 to-teal-900 text-white font-black text-[10px] md:text-xs uppercase tracking-[0.3em] btn-elegant border border-teal-700 shadow-2xl"
-        >
-          Successful Buy
-        </button>
-        <button 
-          onClick={() => handleConclusion(false)} 
-          className="px-10 py-5 rounded-2xl bg-white text-teal-400 font-black text-[10px] md:text-xs uppercase tracking-[0.3em] btn-elegant border border-teal-100 shadow-sm"
-        >
-          Dismiss
-        </button>
+        <button onClick={handleSuccessfulBuy} className="flex-1 py-5 rounded-2xl bg-gradient-to-r from-teal-800 to-teal-900 text-white font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl transition-transform active:scale-95">Successful Buy</button>
+        <button onClick={onReset} className="px-10 py-5 rounded-2xl bg-white text-teal-400 font-black text-[10px] uppercase tracking-[0.3em] border border-teal-100 transition-transform active:scale-95">Dismiss</button>
       </div>
     </div>
   );

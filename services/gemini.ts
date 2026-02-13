@@ -1,9 +1,8 @@
-
 import { GoogleGenAI, Type, Modality, Chat, LiveServerMessage, Blob } from "@google/genai";
 import { AnalysisResult, GroundingSource } from "../types.ts";
 
 /**
- * Helper to handle retries for API calls with specialized handling for Quota and Network errors.
+ * Helper to handle retries for API calls.
  */
 async function withRetry<T>(
   fn: (ai: GoogleGenAI, modelName: string) => Promise<T>, 
@@ -17,7 +16,7 @@ async function withRetry<T>(
   const apiKey = process.env.API_KEY;
   
   if (!apiKey || apiKey === "" || apiKey.includes("your_actual")) {
-    throw new Error("KEY_NOT_CONFIGURED: The Gemini API key is missing. Check Vercel Environment Variables or the diagnostic console.");
+    throw new Error("KEY_NOT_CONFIGURED: The Gemini API key is missing.");
   }
 
   for (let i = 0; i < maxRetries; i++) {
@@ -30,36 +29,19 @@ async function withRetry<T>(
       
       console.error(`Bazaar-Sense: Attempt ${i+1} failed [${currentModel}]:`, err);
 
-      // Handle Quota or Rate Limits
       const isQuotaError = errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED');
       if (isQuotaError && i < maxRetries - 1) {
-        if (fallbackModel && i === 0) {
-          currentModel = fallbackModel;
-        }
+        if (fallbackModel && i === 0) currentModel = fallbackModel;
         await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
         continue;
       }
 
-      // Handle generic 500 error (transient proxy issues)
       const isInternalError = errStr.includes('500') || errStr.includes('Rpc failed');
       if (isInternalError && i < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
         continue;
       }
       
-      // Handle Invalid Key (403)
-      if (errStr.includes('403')) {
-        throw new Error("FORBIDDEN: Your API Key was rejected. Please check it in Google AI Studio.");
-      }
-
-      // Handle Model Not Found (404)
-      if (errStr.includes('404') || errStr.includes('not found')) {
-        if (fallbackModel && i === 0) {
-          currentModel = fallbackModel;
-          continue;
-        }
-      }
-
       throw err;
     }
   }
@@ -69,11 +51,11 @@ async function withRetry<T>(
 function parseJSONFromResponse(text: string): any {
   const jsonRegex = /\{[\s\S]*\}/;
   const match = text.match(jsonRegex);
-  if (!match) throw new Error("The expert returned an unreadable format.");
+  if (!match) throw new Error("Format error.");
   try {
     return JSON.parse(match[0]);
   } catch (e) {
-    throw new Error("Failed to parse bazaar data.");
+    throw new Error("JSON parse error.");
   }
 }
 
@@ -93,10 +75,10 @@ export const analyzeImage = async (
             },
           },
           {
-            text: `Identify this item from a local bazaar in Peshawar, Pakistan. Find typical prices in PKR. 
+            text: `Identify this item from a bazaar in Peshawar. 
+            Find typical prices in PKR.
+            Provide 2-3 "Verified Shops" in either Namak Mandi, Qissa Khwani, or Khyber Bazaar that sell this authentic item.
             
-            CRITICAL: Return strictly JSON. 
-            Do NOT confuse Urdu/Pashto with Hindi script or vocabulary. Use authentic regional naming.
             JSON structure:
             {
               "objectName": "string",
@@ -104,7 +86,10 @@ export const analyzeImage = async (
               "urdu": { "name": "string", "phonetic": "string" },
               "pashto": { "name": "string", "phonetic": "string" },
               "description": "string",
-              "locationTips": "string"
+              "locationTips": "string",
+              "verifiedShops": [
+                { "name": "string", "location": "string", "specialty": "string", "discountCode": "string", "rating": 5 }
+              ]
             }`,
           },
         ],
@@ -115,10 +100,9 @@ export const analyzeImage = async (
     });
 
     const text = response.text;
-    if (!text) throw new Error("The analysis returned no content.");
+    if (!text) throw new Error("No content.");
     const parsedResult = parseJSONFromResponse(text) as AnalysisResult;
 
-    // Extract grounding sources
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -134,41 +118,65 @@ export const analyzeImage = async (
 
 export const generateTTS = async (text: string, targetLanguageContext: string = "Pashto"): Promise<Uint8Array> => {
   return withRetry(async (ai) => {
+    // Explicit instructional prompt for clear TTS generation
+    const prompt = `Say in ${targetLanguageContext}: ${text}`;
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: [{ 
-        parts: [{ text: `Say clearly in ${targetLanguageContext} dialect of Peshawar: "${text}"` }] 
+        parts: [{ text: prompt }] 
       }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
+            // Using a resilient prebuilt voice config
             prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },
       },
     });
 
-    const data = response.candidates?.[0]?.content?.parts.find(p => p.inlineData?.data)?.inlineData?.data;
-    if (!data) throw new Error("Speech synthesis failed.");
-    return decode(data);
+    // Handle extraction with high resilience
+    const candidates = response.candidates;
+    if (!candidates || candidates.length === 0) {
+      throw new Error("Speech synthesis failed: Model returned no candidates.");
+    }
+
+    const candidate = candidates[0];
+    const parts = candidate.content?.parts;
+    
+    if (!parts || parts.length === 0) {
+      throw new Error("Speech synthesis failed: Model returned no content parts.");
+    }
+
+    let base64Data: string | undefined;
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        base64Data = part.inlineData.data;
+        break;
+      }
+    }
+    
+    if (!base64Data) {
+      console.warn("TTS Debug: Candidate content structure:", JSON.stringify(candidate.content));
+      throw new Error("Speech synthesis failed: Audio data part missing in response.");
+    }
+    
+    return decode(base64Data);
   }, 'gemini-2.5-flash-preview-tts');
 };
 
 export function encode(bytes: Uint8Array) {
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
 
 export function decode(base64: string) {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
   return bytes;
 }
 

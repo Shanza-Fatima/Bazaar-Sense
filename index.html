@@ -7,12 +7,19 @@
   <title>Bazaar-Sense</title>
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --brand-accent: #c2a172; /* Soft Gold/Bazaar Sand */
+      --brand-deep: #2d3436;
+      --soft-bg: #faf9f6;
+    }
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--soft-bg);
+      color: var(--brand-deep);
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
     .custom-scrollbar::-webkit-scrollbar {
       width: 4px;
@@ -24,16 +31,27 @@
       background: #e2e8f0;
       border-radius: 10px;
     }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+    .elegant-shadow {
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
+    }
     #root {
       min-height: 100vh;
     }
+    .btn-elegant {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-elegant:active {
+      transform: scale(0.97);
+    }
   </style>
 <script>
-  // Ensure process.env is available for the browser environment
   window.process = window.process || { env: {} };
-  
-  // Vercel / Build-time injection logic
-  // If the variable isn't injected, we handle it via the Setup UI in App.tsx
   window.process.env.API_KEY = window.process.env.API_KEY || "";
 </script>
 <script type="importmap">

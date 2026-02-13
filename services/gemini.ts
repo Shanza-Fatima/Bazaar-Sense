@@ -20,9 +20,8 @@ async function withRetry<T>(
     throw new Error("KEY_NOT_CONFIGURED: The Gemini API key is missing. Check Vercel Environment Variables or the diagnostic console.");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
-
   for (let i = 0; i < maxRetries; i++) {
+    const ai = new GoogleGenAI({ apiKey });
     try {
       return await fn(ai, currentModel);
     } catch (err: any) {
@@ -38,6 +37,13 @@ async function withRetry<T>(
           currentModel = fallbackModel;
         }
         await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+        continue;
+      }
+
+      // Handle generic 500 error (transient proxy issues)
+      const isInternalError = errStr.includes('500') || errStr.includes('Rpc failed');
+      if (isInternalError && i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
         continue;
       }
       
@@ -131,7 +137,7 @@ export const generateTTS = async (text: string, targetLanguageContext: string = 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: [{ 
-        parts: [{ text: `Instruction: Speak this clearly and naturally as a native ${targetLanguageContext} speaker from Peshawar. Use authentic regional phonetics. Target text: "${text}"` }] 
+        parts: [{ text: `Say clearly in ${targetLanguageContext} dialect of Peshawar: "${text}"` }] 
       }],
       config: {
         responseModalities: [Modality.AUDIO],

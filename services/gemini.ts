@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality, Chat, LiveServerMessage, Blob } from "@google/genai";
 import { AnalysisResult, GroundingSource } from "../types.ts";
 
@@ -118,8 +119,9 @@ export const analyzeImage = async (
 
 export const generateTTS = async (text: string, targetLanguageContext: string = "Pashto"): Promise<Uint8Array> => {
   return withRetry(async (ai) => {
-    // Explicit instructional prompt for clear TTS generation
-    const prompt = `Say in ${targetLanguageContext}: ${text}`;
+    // Improved prompt with specific dialect instruction for Pashto
+    const languageLabel = targetLanguageContext === "Pashto" ? "Pashto (Peshawar dialect)" : targetLanguageContext;
+    const prompt = `Say this ${languageLabel} word clearly: ${text}`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
@@ -130,7 +132,6 @@ export const generateTTS = async (text: string, targetLanguageContext: string = 
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            // Using a resilient prebuilt voice config
             prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },

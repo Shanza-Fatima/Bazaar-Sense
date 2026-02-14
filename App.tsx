@@ -181,8 +181,7 @@ const App: React.FC = () => {
                 Market Prices <span className="text-teal-600">at Your Fingertips.</span>
               </h2>
               <div className="text-teal-900/40 text-sm md:text-base font-semibold leading-relaxed max-w-md mx-auto space-y-1">
-                <p>Find fair PKR prices.</p>
-                <p>Negotiate deals easily.</p>
+                <p>Find fair PKR prices. Negotiate deals easily.</p>
                 <p>Real-time bridge translation.</p>
               </div>
             </div>

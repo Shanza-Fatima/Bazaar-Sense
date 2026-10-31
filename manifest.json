@@ -2,11 +2,11 @@
 {
   "name": "Bazaar-Sense",
   "short_name": "BazaarSense",
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#4f46e5",
-  "description": "AI-powered shopping companion for Pakistani bazaars.",
+  "background_color": "#fdfbf7",
+  "theme_color": "#0f766e",
+  "description": "An AI-powered shopping companion for Pakistani bazaars. Capture photos of items to get typical PKR prices, translations, and pronunciations.",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png",

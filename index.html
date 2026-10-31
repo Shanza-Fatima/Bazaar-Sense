@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bazaar-Sense</title>
-  <link rel="manifest" href="manifest.json">
+  <meta name="description" content="An AI-powered shopping companion for Pakistani bazaars. Capture photos of items to get typical PKR prices, translations, and pronunciations.">
+  <meta property="og:title" content="Bazaar-Sense">
+  <meta property="og:description" content="An AI-powered shopping companion for Pakistani bazaars. Capture photos of items to get typical PKR prices, translations, and pronunciations.">
+  <link rel="manifest" href="/manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -13,6 +16,7 @@
       --brand-accent: #d97706; /* Burnt Orange/Amber */
       --brand-deep: #134e4a;
       --soft-bg: #fdfbf7;
+      --soft-rose: #fff1f2;
     }
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
@@ -40,68 +44,111 @@
     .bg-object {
       position: absolute;
       pointer-events: none;
-      filter: blur(40px);
-      opacity: 0.12;
+      filter: blur(60px);
+      opacity: 0.1;
+      will-change: transform;
       animation: float-object 40s infinite linear;
     }
 
     .obj-1 {
-      top: 10%;
+      top: -10%;
       left: -5%;
-      width: 400px;
-      height: 400px;
+      width: 500px;
+      height: 500px;
       background: var(--brand-primary);
       border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
-      animation-duration: 45s;
+      animation-duration: 55s;
     }
 
     .obj-2 {
-      bottom: 5%;
+      bottom: -10%;
       right: -10%;
-      width: 500px;
-      height: 500px;
+      width: 600px;
+      height: 600px;
       background: var(--brand-accent);
       border-radius: 50% 50% 30% 70% / 50% 50% 70% 30%;
-      animation-duration: 60s;
-      animation-delay: -10s;
+      animation-duration: 70s;
+      animation-delay: -15s;
     }
 
     .obj-3 {
-      top: 40%;
-      left: 70%;
-      width: 300px;
-      height: 300px;
+      top: 30%;
+      left: 60%;
+      width: 350px;
+      height: 350px;
       background: #0d9488;
       border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-      animation-duration: 50s;
-      animation-delay: -20s;
+      animation-duration: 45s;
+      animation-delay: -25s;
     }
 
-    /* Floating Cultural Motifs (Geometric) */
+    .obj-4 {
+      top: 60%;
+      left: -10%;
+      width: 450px;
+      height: 450px;
+      background: #be185d; /* Warm Rose */
+      opacity: 0.05;
+      border-radius: 40% 60% 50% 50% / 60% 40% 60% 40%;
+      animation-duration: 80s;
+      animation-delay: -5s;
+    }
+
+    .obj-5 {
+      top: -5%;
+      right: 15%;
+      width: 300px;
+      height: 300px;
+      background: #ca8a04; /* Darker Amber */
+      opacity: 0.07;
+      border-radius: 60% 40% 30% 70% / 70% 30% 50% 50%;
+      animation-duration: 65s;
+      animation-delay: -40s;
+    }
+
+    /* Floating Micro-Particles */
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: var(--brand-accent);
+      border-radius: 50%;
+      opacity: 0.2;
+      filter: blur(1px);
+      animation: drift-particle 20s infinite ease-in-out;
+    }
+
+    /* Floating Cultural Motifs */
     .motif {
       position: absolute;
-      opacity: 0.05;
-      filter: blur(2px);
-      animation: drift 60s infinite linear;
+      opacity: 0.06;
+      filter: blur(3px);
+      will-change: transform;
+      animation: drift 80s infinite linear;
     }
 
     .motif-tile {
-      width: 120px;
-      height: 120px;
-      border: 4px solid var(--brand-primary);
+      width: 140px;
+      height: 140px;
+      border: 3px solid var(--brand-primary);
       transform: rotate(45deg);
     }
 
     @keyframes float-object {
       0% { transform: translate(0, 0) rotate(0deg) scale(1); }
-      33% { transform: translate(50px, 100px) rotate(120deg) scale(1.1); }
-      66% { transform: translate(-100px, 50px) rotate(240deg) scale(0.9); }
+      33% { transform: translate(80px, 120px) rotate(120deg) scale(1.15); }
+      66% { transform: translate(-120px, 60px) rotate(240deg) scale(0.85); }
       100% { transform: translate(0, 0) rotate(360deg) scale(1); }
     }
 
     @keyframes drift {
-      from { transform: translate(-10%, -10%) rotate(0deg); }
-      to { transform: translate(110%, 110%) rotate(360deg); }
+      from { transform: translate(-20%, -20%) rotate(0deg); }
+      to { transform: translate(120%, 120%) rotate(360deg); }
+    }
+
+    @keyframes drift-particle {
+      0%, 100% { transform: translate(0, 0); opacity: 0.1; }
+      50% { transform: translate(100px, -100px); opacity: 0.3; }
     }
 
     .custom-scrollbar::-webkit-scrollbar {
@@ -140,21 +187,7 @@
       -webkit-text-fill-color: transparent;
     }
   </style>
-<script>
-  window.process = window.process || { env: {} };
-  window.process.env.API_KEY = window.process.env.API_KEY || "";
-</script>
-<script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4"
-  }
-}
-</script>
-<script type="module" src="index.tsx"></script>
+  <link rel="stylesheet" href="/index.css">
 </head>
 <body>
   <div class="bg-canvas">
@@ -162,13 +195,22 @@
     <div class="bg-object obj-1"></div>
     <div class="bg-object obj-2"></div>
     <div class="bg-object obj-3"></div>
+    <div class="bg-object obj-4"></div>
+    <div class="bg-object obj-5"></div>
+    
+    <!-- Fine Particles -->
+    <div class="particle" style="top: 20%; left: 30%; animation-delay: 0s;"></div>
+    <div class="particle" style="top: 70%; left: 10%; animation-delay: -5s;"></div>
+    <div class="particle" style="top: 40%; left: 80%; animation-delay: -10s;"></div>
+    <div class="particle" style="top: 10%; left: 90%; animation-delay: -15s;"></div>
     
     <!-- Floating Motifs for added texture -->
-    <div class="motif" style="top: 10%; left: 20%;"><div class="motif-tile"></div></div>
-    <div class="motif" style="top: 60%; left: 80%; animation-delay: -15s;"><div class="motif-tile" style="border-radius: 50%;"></div></div>
-    <div class="motif" style="top: 30%; left: 50%; animation-delay: -30s;"><div class="motif-tile" style="transform: rotate(30deg); border-width: 2px;"></div></div>
-    <div class="motif" style="top: 80%; left: 10%; animation-delay: -45s;"><div class="motif-tile" style="transform: rotate(60deg); border-color: var(--brand-accent);"></div></div>
+    <div class="motif" style="top: 5%; left: 15%;"><div class="motif-tile"></div></div>
+    <div class="motif" style="top: 65%; left: 75%; animation-delay: -20s;"><div class="motif-tile" style="border-radius: 50%; border-color: var(--brand-accent);"></div></div>
+    <div class="motif" style="top: 35%; left: 45%; animation-delay: -40s;"><div class="motif-tile" style="transform: rotate(30deg); border-width: 2px;"></div></div>
+    <div class="motif" style="top: 85%; left: 25%; animation-delay: -60s;"><div class="motif-tile" style="transform: rotate(60deg); border-color: #0d9488;"></div></div>
   </div>
   <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>

@@ -33,10 +33,11 @@ export interface HistoryItem {
   objectName: string;
   pricePKR: string;
   timestamp: number;
+  imageThumbnail?: string;
+  result?: AnalysisResult;
 }
 
 export enum AppState {
-  CONFIG_REQUIRED = 'CONFIG_REQUIRED',
   IDLE = 'IDLE',
   CAPTURING = 'CAPTURING',
   ANALYZING = 'ANALYZING',

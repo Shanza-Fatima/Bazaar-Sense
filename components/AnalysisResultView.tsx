@@ -225,6 +225,10 @@ const AnalysisResultView: React.FC<AnalysisResultViewProps> = ({ result, onReset
       ws.onerror = (e) => {
         console.error("WebSocket connection error:", e);
         setLiveStatus('error');
+        const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        if (!isLocal) {
+          alert("Live voice needs the Node server and is not available on this hosted version. Run the app locally with 'npm run dev' to use it. The text translation and scan features still work here.");
+        }
       };
 
       ws.onclose = () => {

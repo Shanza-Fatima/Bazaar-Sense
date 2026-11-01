@@ -267,10 +267,30 @@ const CameraView: React.FC<CameraViewProps> = ({ onCapture, isLoading }) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      onCapture(base64);
+      const rawBase64 = result.includes(',') ? result.split(',')[1] : result;
+
+      // Shrink big photos to 1024px wide JPEG before sending. A phone photo can be
+      // 5MB+, which is slow and is rejected outright on Vercel (4.5MB request limit).
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, 1024 / img.width);
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * scale);
+          c.height = Math.round(img.height * scale);
+          const cx = c.getContext('2d');
+          if (!cx) return onCapture(rawBase64);
+          cx.drawImage(img, 0, 0, c.width, c.height);
+          onCapture(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+        } catch {
+          onCapture(rawBase64);
+        }
+      };
+      img.onerror = () => onCapture(rawBase64);
+      img.src = result;
     };
     reader.readAsDataURL(file);
+    e.target.value = ''; // allow picking the same file again
   };
 
   const handleSampleClick = (type: 'chappal' | 'samovar' | 'pakol' | 'dryfruits') => {

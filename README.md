@@ -42,6 +42,16 @@
 4. `npm run dev`, then open **http://localhost:3000** (the camera only works on `localhost` or `https`)
 5. Allow **Camera** (and **Microphone** for the live translation bridge) when asked
 
+### Deploy on Vercel
+
+The `api/[route].ts` file turns the backend routes into Vercel functions, so scanning, translation and pronunciation work on Vercel. Setup:
+
+1. Import the GitHub repo in Vercel (framework: Vite; the defaults are fine).
+2. Project → Settings → Environment Variables → add `GEMINI_API_KEY` (all environments), then redeploy.
+3. Check `https://YOUR-SITE.vercel.app/api/health` returns `{"status":"ok"}`.
+
+**Limitation:** the live voice bridge needs a WebSocket, which Vercel does not offer. It works locally with `npm run dev`; on Vercel the app shows a message instead.
+
 ### Production
 
 `npm run build` then `npm start`

@@ -119,7 +119,7 @@ export async function decodeAudioData(
 ): Promise<AudioBuffer> {
   // Try native AudioContext WAV decoding first (since gemini-3.8-flash-lite-tts returns a complete WAV file)
   try {
-    const copyBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    const copyBuffer = new Uint8Array(data).buffer as ArrayBuffer;
     const decoded = await ctx.decodeAudioData(copyBuffer);
     if (decoded) return decoded;
   } catch (nativeErr) {

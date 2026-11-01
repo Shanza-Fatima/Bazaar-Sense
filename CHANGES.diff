@@ -1,0 +1,538 @@
+diff -ruN user/.env.example fixed/.env.example
+--- user/.env.example	2026-10-31 19:03:30.000000000 +0500
++++ fixed/.env.example	2026-11-01 12:42:17.041508441 +0500
+@@ -1,2 +1,4 @@
+-# Gemini API configuration for Peshawar Bazaar-Sense
++# Copy this file to  .env.local  (same folder as server.ts) and paste your key after the =
++# Get a free key at https://aistudio.google.com/apikey
++# Do NOT put quotes or spaces around the key.
+ GEMINI_API_KEY=
+diff -ruN user/.gitignore fixed/.gitignore
+--- user/.gitignore	2026-10-31 19:03:30.000000000 +0500
++++ fixed/.gitignore	2026-11-01 12:42:17.041450288 +0500
+@@ -22,3 +22,8 @@
+ *.njsproj
+ *.sln
+ *.sw?
++
++# Secrets: never commit your API key
++.env
++.env.*
++!.env.example
+diff -ruN user/App.tsx fixed/App.tsx
+--- user/App.tsx	2026-10-31 19:03:30.000000000 +0500
++++ fixed/App.tsx	2026-11-01 12:42:17.041258156 +0500
+@@ -41,6 +41,18 @@
+   });
+ };
+ 
++// Turns raw server/Google errors into a clear instruction.
++const explainError = (raw: string): string => {
++  const m = raw.toLowerCase();
++  if (m.includes('key_not_configured')) return 'The server has no Gemini API key. Create a file named .env.local in the project folder containing GEMINI_API_KEY=your_key, then stop and restart "npm run dev".';
++  if (m.includes('api key not valid') || m.includes('api_key_invalid')) return 'Google rejected your API key. Create a new key at aistudio.google.com/apikey, put it in .env.local, and restart the server.';
++  if (m.includes('permission_denied') || m.includes('403')) return 'Your key is blocked or this model is not allowed for it. Create a new key at aistudio.google.com/apikey and restart the server.';
++  if (m.includes('server returned error status 404') || m.includes('failed to fetch')) return 'The backend is not running. Start the app with "npm run dev" (not "vite"), then open http://localhost:3000.';
++  if (m.includes('timeout')) return 'Google took too long to answer. Check your internet connection and try again.';
++  if (m.includes('not_found') || m.includes('404')) return 'A Gemini model name used by the server is no longer available. Update the model lists at the top of server.ts.';
++  return raw;
++};
++
+ const App: React.FC = () => {
+   const [state, setState] = useState<AppState>(AppState.IDLE);
+   const [result, setResult] = useState<AnalysisResult | null>(null);
+@@ -158,7 +170,7 @@
+       setError({ 
+         message: isQuota ? "High Demand / Quota Limit" : "Analysis Failed", 
+         isQuota, 
+-        details: err?.message || "Please try again or select one of the instant bazaar presets."
++        details: explainError(err?.message || "Please try again or select one of the instant bazaar presets.")
+       });
+       setState(AppState.ERROR);
+       if (isQuota) setQuotaInfo({ message: 'Quota Busy', status: 'error' });
+diff -ruN user/CHANGES.diff fixed/CHANGES.diff
+--- user/CHANGES.diff	1970-01-01 05:00:00.000000000 +0500
++++ fixed/CHANGES.diff	2026-11-01 12:42:53.263440487 +0500
+@@ -0,0 +1,52 @@
++diff -ruN user/.env.example fixed/.env.example
++--- user/.env.example	2026-10-31 19:03:30.000000000 +0500
+++++ fixed/.env.example	2026-11-01 12:42:17.041508441 +0500
++@@ -1,2 +1,4 @@
++-# Gemini API configuration for Peshawar Bazaar-Sense
+++# Copy this file to  .env.local  (same folder as server.ts) and paste your key after the =
+++# Get a free key at https://aistudio.google.com/apikey
+++# Do NOT put quotes or spaces around the key.
++ GEMINI_API_KEY=
++diff -ruN user/.gitignore fixed/.gitignore
++--- user/.gitignore	2026-10-31 19:03:30.000000000 +0500
+++++ fixed/.gitignore	2026-11-01 12:42:17.041450288 +0500
++@@ -22,3 +22,8 @@
++ *.njsproj
++ *.sln
++ *.sw?
+++
+++# Secrets: never commit your API key
+++.env
+++.env.*
+++!.env.example
++diff -ruN user/App.tsx fixed/App.tsx
++--- user/App.tsx	2026-10-31 19:03:30.000000000 +0500
+++++ fixed/App.tsx	2026-11-01 12:42:17.041258156 +0500
++@@ -41,6 +41,18 @@
++   });
++ };
++ 
+++// Turns raw server/Google errors into a clear instruction.
+++const explainError = (raw: string): string => {
+++  const m = raw.toLowerCase();
+++  if (m.includes('key_not_configured')) return 'The server has no Gemini API key. Create a file named .env.local in the project folder containing GEMINI_API_KEY=your_key, then stop and restart "npm run dev".';
+++  if (m.includes('api key not valid') || m.includes('api_key_invalid')) return 'Google rejected your API key. Create a new key at aistudio.google.com/apikey, put it in .env.local, and restart the server.';
+++  if (m.includes('permission_denied') || m.includes('403')) return 'Your key is blocked or this model is not allowed for it. Create a new key at aistudio.google.com/apikey and restart the server.';
+++  if (m.includes('server returned error status 404') || m.includes('failed to fetch')) return 'The backend is not running. Start the app with "npm run dev" (not "vite"), then open http://localhost:3000.';
+++  if (m.includes('timeout')) return 'Google took too long to answer. Check your internet connection and try again.';
+++  if (m.includes('not_found') || m.includes('404')) return 'A Gemini model name used by the server is no longer available. Update the model lists at the top of server.ts.';
+++  return raw;
+++};
+++
++ const App: React.FC = () => {
++   const [state, setState] = useState<AppState>(AppState.IDLE);
++   const [result, setResult] = useState<AnalysisResult | null>(null);
++@@ -158,7 +170,7 @@
++       setError({ 
++         message: isQuota ? "High Demand / Quota Limit" : "Analysis Failed", 
++         isQuota, 
++-        details: err?.message || "Please try again or select one of the instant bazaar presets."
+++        details: explainError(err?.message || "Please try again or select one of the instant bazaar presets.")
++       });
++       setState(AppState.ERROR);
++       if (isQuota) setQuotaInfo({ message: 'Quota Busy', status: 'error' });
+diff -ruN user/README.md fixed/README.md
+--- user/README.md	2026-10-31 19:03:30.000000000 +0500
++++ fixed/README.md	2026-11-01 12:42:36.780126825 +0500
+@@ -1,7 +1,7 @@
+ 
+ # Bazaar-Sense 🏺
+ 
+-**Bazaar-Sense** is a world-class AI shopping companion designed for travelers navigating the vibrant bazaars of Pakistan, specifically optimized for the Peshawar region. It leverages state-of-the-art Multimodal AI to identify items, suggest fair market prices in PKR, and act as a real-time linguistic bridge between travelers and local sellers.
++**Bazaar-Sense** is an AI shopping companion prototype designed for travelers navigating the vibrant bazaars of Pakistan, specifically optimized for the Peshawar region. It leverages state-of-the-art Multimodal AI to identify items, suggest fair market prices in PKR, and act as a real-time linguistic bridge between travelers and local sellers.
+ 
+ ---
+ 
+@@ -18,13 +18,12 @@
+ 
+ ## 🛠 Technology Stack
+ 
+-- **Frontend**: React 19 (ES6+ Modules)
+-- **Styling**: Tailwind CSS
+-- **AI Core**: Google Gemini API
+-  - `gemini-3-flash-preview`: For rapid visual analysis and grounding.
+-  - `gemini-2.5-flash-native-audio-preview-12-2025`: Powers the low-latency Live Audio Bridge.
+-  - `gemini-2.5-flash-preview-tts`: For high-quality text-to-speech in Urdu/Pashto.
+-- **Deployment**: Optimized for modern static hosting (Vercel, Netlify, etc.).
++- **Frontend**: React 19, Vite, Tailwind CSS
++- **Backend**: Node.js + Express (`server.ts`). The Gemini API key stays on the server and is never sent to the browser.
++- **AI**: Google Gemini API (`@google/genai`)
++  - Photo analysis and translation: `gemini-3.1-flash-lite`, with `gemini-2.5-flash` and `gemini-3.8-flash` as automatic fallbacks
++  - Pronunciation audio: `gemini-3.8-flash-lite-tts` (with fallbacks)
++  - Live voice bridge: `gemini-3.8-live` over a WebSocket (`/ws/live`)
+ 
+ ---
+ 
+@@ -32,14 +31,22 @@
+ 
+ ### Prerequisites
+ 
+-1. **Google AI Studio API Key**: Obtain a key from [Google AI Studio](https://aistudio.google.com/).
+-2. **Environment Variable**: Ensure the API key is available as `process.env.API_KEY` (or injected into the window context as `window.API_KEY`).
++- Node.js 20 or newer
++- A free Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
+ 
+-### Installation
++### Run it locally
+ 
+-1. Clone the repository to your local machine.
+-2. Open `index.html` in a local development server or deploy to a modern cloud provider.
+-3. Grant permissions for **Camera**, **Microphone**, and **Location** when prompted.
++1. `npm install`
++2. Copy `.env.example` to `.env.local` and put your key after `GEMINI_API_KEY=` (no quotes, no spaces)
++3. `npm run check` — tests your key and every model and tells you what is broken, if anything
++4. `npm run dev`, then open **http://localhost:3000** (the camera only works on `localhost` or `https`)
++5. Allow **Camera** (and **Microphone** for the live translation bridge) when asked
++
++### Production
++
++`npm run build` then `npm start`
++
++> **Note:** shop names, ratings and discount codes in the results are generated by the AI and are **not verified**.
+ 
+ ---
+ 
+@@ -66,5 +73,5 @@
+ ## 📜 Metadata & Versioning
+ 
+ - **Version**: 2.9 (Peshawar Edition)
+-- **Status**: Production Ready / PWA Supported
++- **Status**: Working prototype
+ - **Target Region**: Peshawar, Khyber Pakhtunkhwa, Pakistan.
+diff -ruN user/check-gemini.ts fixed/check-gemini.ts
+--- user/check-gemini.ts	1970-01-01 05:00:00.000000000 +0500
++++ fixed/check-gemini.ts	2026-11-01 12:42:36.761868118 +0500
+@@ -0,0 +1,65 @@
++// Run with:  npm run check
++// Tells you exactly which part of the Gemini setup is broken: key, model names, or image input.
++import dotenv from "dotenv";
++import { GoogleGenAI, Modality } from "@google/genai";
++
++dotenv.config({ path: [".env.local", ".env"], quiet: true });
++
++const TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.8-flash"];
++const TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts", "gemini-2.5-flash-preview-tts"];
++// A tiny 1x1 PNG, just to prove image input works.
++const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
++
++const key = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
++if (!key || key.includes("your_")) {
++  console.log("\n❌ NO KEY FOUND.");
++  console.log("   Create a file named .env.local in this folder (next to server.ts) containing:");
++  console.log("   GEMINI_API_KEY=paste_your_key_here");
++  console.log("   Get a key at https://aistudio.google.com/apikey\n");
++  process.exit(1);
++}
++console.log(`\n✅ Key found (ends with ...${key.slice(-4)}, ${key.length} characters)`);
++if (key.length < 30 || /\s|["']/.test(key)) console.log("⚠️  The key looks wrong (too short, or has spaces/quotes). Re-copy it without quotes.");
++
++const ai = new GoogleGenAI({ apiKey: key });
++const short = (e: any) => String(e?.message || e).replace(/\s+/g, " ").slice(0, 160);
++
++async function main() {
++  let okText = 0;
++  console.log("\nText + image models:");
++  for (const model of TEXT_MODELS) {
++    try {
++      const r = await ai.models.generateContent({
++        model,
++        contents: { parts: [{ inlineData: { mimeType: "image/png", data: TINY_PNG } }, { text: "Reply with the single word OK." }] },
++      });
++      console.log(`  ✅ ${model}  ->  ${(r.text || "").trim().slice(0, 30)}`);
++      okText++;
++    } catch (e) {
++      console.log(`  ❌ ${model}  ->  ${short(e)}`);
++    }
++  }
++
++  let okTts = 0;
++  console.log("\nSpeech (TTS) models:");
++  for (const model of TTS_MODELS) {
++    try {
++      const r = await ai.models.generateContent({
++        model,
++        contents: [{ parts: [{ text: "Say hello" }] }],
++        config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
++      });
++      const has = r.candidates?.[0]?.content?.parts?.some((p: any) => p.inlineData?.data);
++      console.log(`  ${has ? "✅" : "❌"} ${model}  ->  ${has ? "audio received" : "no audio in reply"}`);
++      if (has) okTts++;
++    } catch (e) {
++      console.log(`  ❌ ${model}  ->  ${short(e)}`);
++    }
++  }
++
++  console.log("\nSummary:");
++  console.log(okText ? "  Photo analysis should work." : "  Photo analysis will FAIL. Read the errors above (invalid key = make a new key; 429 = wait or use another key).");
++  console.log(okTts ? "  Pronunciation audio should work." : "  Pronunciation audio will fail (the rest of the app can still work).");
++  console.log("");
++}
++main();
+diff -ruN user/components/CameraView.tsx fixed/components/CameraView.tsx
+--- user/components/CameraView.tsx	2026-10-31 19:03:30.000000000 +0500
++++ fixed/components/CameraView.tsx	2026-11-01 12:42:17.040892302 +0500
+@@ -170,6 +170,9 @@
+   const canvasRef = useRef<HTMLCanvasElement>(null);
+   const fileInputRef = useRef<HTMLInputElement>(null);
+   const [stream, setStream] = useState<MediaStream | null>(null);
++  const streamRef = useRef<MediaStream | null>(null);
++  const unmountedRef = useRef(false);
++  const [hint, setHint] = useState<string | null>(null);
+   const [error, setError] = useState<string | null>(null);
+   const [isFlashActive, setIsFlashActive] = useState(false);
+   const [coolDown, setCoolDown] = useState(false);
+@@ -177,9 +180,8 @@
+ 
+   const startCamera = useCallback(async () => {
+     setError(null);
+-    if (stream) {
+-      stream.getTracks().forEach(track => track.stop());
+-    }
++    streamRef.current?.getTracks().forEach(track => track.stop());
++    streamRef.current = null;
+ 
+     try {
+       // Use ideal facingMode to succeed on mobile as well as laptop webcams
+@@ -191,6 +193,8 @@
+         },
+         audio: false,
+       });
++      if (unmountedRef.current) { mediaStream.getTracks().forEach(t => t.stop()); return; }
++      streamRef.current = mediaStream;
+       setStream(mediaStream);
+       if (videoRef.current) {
+         videoRef.current.srcObject = mediaStream;
+@@ -200,20 +204,27 @@
+       // Try again without facingMode constraint if first attempt failed
+       try {
+         const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
++        if (unmountedRef.current) { fallbackStream.getTracks().forEach(t => t.stop()); return; }
++        streamRef.current = fallbackStream;
+         setStream(fallbackStream);
+         if (videoRef.current) videoRef.current.srcObject = fallbackStream;
+       } catch (finalErr: any) {
+-        setError('Camera access is unavailable on this device or permission was declined.');
++        console.error('Camera error:', finalErr);
++        setError(!window.isSecureContext
++          ? 'The camera only works on http://localhost:3000 or an https:// address.'
++          : 'Camera access is unavailable on this device or permission was declined.');
+       }
+     }
+   }, [facingMode]);
+ 
+   useEffect(() => {
++    unmountedRef.current = false;
+     startCamera();
+     return () => {
+-      if (stream) {
+-        stream.getTracks().forEach(track => track.stop());
+-      }
++      unmountedRef.current = true;
++      // Uses the ref (not the state) so the real, current stream is always released.
++      streamRef.current?.getTracks().forEach(track => track.stop());
++      streamRef.current = null;
+     };
+   }, [startCamera]);
+ 
+@@ -227,7 +238,13 @@
+       const video = videoRef.current;
+       const canvas = canvasRef.current;
+       const context = canvas.getContext('2d');
+-      if (context && video.videoWidth > 0 && video.videoHeight > 0) {
++      if (!context || video.videoWidth === 0 || video.videoHeight === 0) {
++        // Previously this did nothing at all, which looked like "the button doesn't work".
++        setHint('Camera is not ready. Allow camera access, or use Upload / a sample below.');
++        setTimeout(() => setHint(null), 4000);
++        return;
++      }
++      {
+         setIsFlashActive(true);
+         setTimeout(() => setIsFlashActive(false), 150);
+         setCoolDown(true);
+@@ -355,6 +372,7 @@
+           </div>
+         ) : (
+           <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-6 z-40">
++            {hint && <p className="absolute -top-14 bg-black/70 text-white text-xs font-semibold px-4 py-2 rounded-full max-w-[90%] text-center">{hint}</p>}
+             <button
+               onClick={() => fileInputRef.current?.click()}
+               title="Upload Photo"
+diff -ruN user/index.tsx fixed/index.tsx
+--- user/index.tsx	2026-10-31 19:03:30.000000000 +0500
++++ fixed/index.tsx	2026-11-01 12:42:17.038158682 +0500
+@@ -15,20 +15,19 @@
+   </React.StrictMode>
+ );
+ 
+-// Register Service Worker for offline capability
+-if ('serviceWorker' in navigator && process.env.NODE_ENV !== 'development') {
+-  window.addEventListener('load', () => {
+-    navigator.serviceWorker
+-      .register('/sw.js')
+-      .then((reg) => console.log('Bazaar-Sense SW registered:', reg.scope))
+-      .catch((err) => console.log('Bazaar-Sense SW registration failed:', err));
+-  });
+-} else if ('serviceWorker' in navigator) {
+-  // Also register in dev/preview if available for offline testing
+-  window.addEventListener('load', () => {
+-    navigator.serviceWorker
+-      .register('/sw.js')
+-      .then((reg) => console.log('Bazaar-Sense SW active:', reg.scope))
+-      .catch((err) => console.log('Bazaar-Sense SW failed:', err));
+-  });
++// Service worker (offline support) is production-only. In development it served stale,
++// cached copies of the code, so edits and fixes never showed up in the browser.
++if ('serviceWorker' in navigator) {
++  if (import.meta.env.PROD) {
++    window.addEventListener('load', () => {
++      navigator.serviceWorker
++        .register('/sw.js')
++        .then((reg) => console.log('Bazaar-Sense SW registered:', reg.scope))
++        .catch((err) => console.log('Bazaar-Sense SW registration failed:', err));
++    });
++  } else {
++    // Remove any worker/cache left over from earlier runs.
++    navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
++    if ('caches' in window) caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
++  }
+ }
+diff -ruN user/package.json fixed/package.json
+--- user/package.json	2026-10-31 19:03:30.000000000 +0500
++++ fixed/package.json	2026-11-01 12:42:17.041344602 +0500
+@@ -6,7 +6,8 @@
+   "scripts": {
+     "dev": "tsx server.ts",
+     "build": "vite build",
+-    "start": "node server.ts"
++    "start": "NODE_ENV=production tsx server.ts",
++    "check": "tsx check-gemini.ts"
+   },
+   "dependencies": {
+     "@google/genai": "^2.32.0",
+diff -ruN user/server.ts fixed/server.ts
+--- user/server.ts	2026-10-31 19:03:30.000000000 +0500
++++ fixed/server.ts	2026-11-01 12:42:17.038062097 +0500
+@@ -7,17 +7,27 @@
+ import { createServer as createViteServer } from "vite";
+ import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
+ 
+-// Load environment variables from .env / .env.local file
+-dotenv.config();
++// Load environment variables. The first file that defines a variable wins, so
++// .env.local overrides .env. (Plain dotenv.config() only reads ".env", which is why a
++// key saved in ".env.local" was never found.)
++dotenv.config({ path: ['.env.local', '.env'], quiet: true });
+ 
+ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+ 
++function describeKeyStatus(): string {
++  const k = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
++  if (!k || k.includes("your_actual") || k.includes("your_key")) {
++    return "MISSING. Create a file named .env.local next to server.ts containing:  GEMINI_API_KEY=your_key  then restart the server.";
++  }
++  return `loaded (ends with ...${k.slice(-4)})`;
++}
++
+ // Initialize the GenAI SDK securely on the server side
+ function getAIClient(req?: express.Request) {
+   const customKey = req?.headers ? (req.headers["x-gemini-api-key"] as string) : undefined;
+   const currentKey = customKey || process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+   
+-  if (!currentKey || currentKey === "" || currentKey.includes("your_actual")) {
++  if (!currentKey || currentKey === "" || currentKey.includes("your_actual") || currentKey.includes("your_key")) {
+     throw new Error("key_not_configured: Gemini API key is missing or not configured. Please set GEMINI_API_KEY in your environment or enter it below.");
+   }
+   return new GoogleGenAI({
+@@ -50,12 +60,16 @@
+ }
+ 
+ // Helper for retries with exponential backoff on transient errors and model fallbacks
++const TEXT_MODELS = ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-3.8-flash'];
++// Text models cannot speak, so speech has its own list. (The 2.5 preview TTS model is
++// scheduled to shut down on 17 Nov 2026; it stays last as a fallback until then.)
++const TTS_MODELS = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'];
++
+ async function generateWithFallbackAndRetry(
+   req: express.Request,
+-  fn: (client: GoogleGenAI, model: string) => Promise<any>
++  fn: (client: GoogleGenAI, model: string) => Promise<any>,
++  models: string[] = TEXT_MODELS
+ ): Promise<any> {
+-  // Priority order: 3.1 Flash Lite (high quota, ultra-fast), 2.5 Flash, then 3.8 Flash
+-  const models = ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-3.8-flash'];
+   let lastError: any;
+ 
+   for (const model of models) {
+@@ -68,14 +82,19 @@
+ 
+     try {
+       console.log(`Bazaar-Sense Server: Model ${model} starting...`);
+-      // Wrap each model call in a 16-second timeout so spikes never hang the application
+-      const callWithTimeout = Promise.race([
+-        fn(client, model),
+-        new Promise((_, reject) => 
+-          setTimeout(() => reject(new Error(`Timeout: ${model} took longer than 16 seconds`)), 16000)
+-        )
+-      ]);
+-      return await callWithTimeout;
++      // 16 seconds was too short for photo analysis on slower connections (it made every
++      // model "time out" in a row). 30 seconds per model, and the timer is always cleared.
++      let timer: ReturnType<typeof setTimeout> | undefined;
++      try {
++        return await Promise.race([
++          fn(client, model),
++          new Promise((_, reject) => {
++            timer = setTimeout(() => reject(new Error(`Timeout: ${model} took longer than 30 seconds`)), 30000);
++          })
++        ]);
++      } finally {
++        if (timer) clearTimeout(timer);
++      }
+     } catch (err: any) {
+       lastError = err;
+       const errStr = (err?.message || JSON.stringify(err) || "").toLowerCase();
+@@ -317,11 +336,8 @@
+         const languageLabel = targetLanguageContext === "Pashto" ? "Pashto (Peshawar dialect)" : targetLanguageContext;
+         const prompt = `Say this ${languageLabel} word clearly: ${text}`;
+ 
+-        // Attempt TTS-specific model or fallback gracefully
+-        const ttsModel = model === 'gemini-2.5-flash' ? 'gemini-2.5-flash' : 'gemini-3.8-flash-lite-tts';
+-
+         const response = await client.models.generateContent({
+-          model: ttsModel,
++          model: model,
+           contents: [{ 
+             parts: [{ text: prompt }] 
+           }],
+@@ -352,7 +368,7 @@
+         
+         if (!base64Data) throw new Error("Audio data missing in TTS response.");
+         return { audioBase64: base64Data };
+-      });
++      }, TTS_MODELS);
+ 
+       res.json(result);
+     } catch (err: any) {
+@@ -552,7 +568,8 @@
+   });
+ 
+   server.listen(PORT, "0.0.0.0", () => {
+-    console.log(`Bazaar-Sense server listening on http://0.0.0.0:${PORT}`);
++    console.log(`Bazaar-Sense server listening on http://localhost:${PORT}`);
++    console.log(`Gemini API key: ${describeKeyStatus()}`);
+   });
+ }
+ 
+diff -ruN user/sw.js fixed/sw.js
+--- user/sw.js	2026-10-31 19:03:30.000000000 +0500
++++ fixed/sw.js	2026-11-01 12:42:17.038868918 +0500
+@@ -1,4 +1,4 @@
+-const CACHE_NAME = 'bazaar-sense-v2';
++const CACHE_NAME = 'bazaar-sense-v3';
+ const STATIC_ASSETS = [
+   '/',
+   '/index.html',
+@@ -35,8 +35,15 @@
+     return;
+   }
+ 
+-  // Network-first with cache fallback for HTML navigation,
+-  // Cache-first with network fallback for scripts, styles, and fonts
++  // Never cache dev-server / source files (this is what made old code stick around)
++  if (url.origin !== self.location.origin ||
++      url.pathname.startsWith('/@') ||
++      url.pathname.startsWith('/node_modules') ||
++      /\.(tsx?|map)$/.test(url.pathname)) {
++    return;
++  }
++
++  // Network-first: always try the network, fall back to the cache only when offline
+   event.respondWith(
+     caches.match(event.request).then((cachedResponse) => {
+       const fetchPromise = fetch(event.request)
+@@ -60,9 +67,7 @@
+           return cachedResponse;
+         });
+ 
+-      // If we have a cached response for assets, return it while updating in background,
+-      // otherwise wait for network fetch
+-      return cachedResponse || fetchPromise;
++      return fetchPromise.then((res) => res || cachedResponse);
+     })
+   );
+ });
